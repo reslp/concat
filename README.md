@@ -31,9 +31,11 @@ EXAMPLES
 ========
 
 probably the simplest way to call concat.py is to provide a sequence ID file and a directory containing FASTA files of individual loci:
+
 `python concat.py -t SeqIDFile.txt -d /path/to/sequences/ `
 
 Getting help (displays all available command options):
+
 `python concat.py -h`
 
 
