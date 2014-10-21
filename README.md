@@ -13,8 +13,27 @@ It is under active development and may contain bugs. Please let me know when you
 How does it work?
 ================
 
-concat takes multiple unaligned single locus files and a file containing the desired set of taxa as input.
+`concat` takes multiple unaligned single locus FASTA files and a file containing the desired set of taxa as input.
 It creates new single locus files reduced to the desired set of taxa, aligns the files and replaces gaps (-) at the beginning
-and end of the alignments with question marks (?). Then it creates a concatenated alignment file an the basis of the aligned
+and end of the alignments with question marks (?). Then it creates a concatenated alignment file on the basis of the aligned
 single locus files and adds question marks for missing loci.
 
+
+REQUIREMENTS
+============
+
+- MacOS X or other Unix like operating system (Windows Version in the works)
+- [python](www.python.org) 2.7.8+, which comes with most Unix like systems
+- [mafft](http://mafft.cbrc.jp/alignment/software/) v7, for the alignment function
+
+
+COPYRIGTH AND LICENSE
+=====================
+
+Copyright (C) 2014 Philipp Resl
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program in the file LICENSE. If not, see http://www.gnu.org/licenses/.
