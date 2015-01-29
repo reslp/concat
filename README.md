@@ -1,7 +1,7 @@
 concat.py
 =========
 
-python script to create concatenated FASTA files for phylogenetic analyses from single locus alignments
+python script to create concatenated FASTA files for phylogenetic analyses from single locus alignments. It is an updated and combined version of the scripts in the pipeline in my phylo-scripts repository.
 
 
 DESCRIPTION
