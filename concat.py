@@ -11,6 +11,7 @@
 # problem if file list is given! doesn't work properly. - in reduce - DONE
 # if concat only is used it works only for single lined sequences! - DONE
 # input dir has to be specified when concat is used!
+# still no check for sequence length in concat
 
 import argparse
 import glob
@@ -124,19 +125,29 @@ def reduce(): #reduces alignments to desired set of taxa
 		#Open and read Files
 		Found = 0
 		for Taxon in TaxonList:
+			Sequence = ""
+			SeqName = ""
 			for Line in Sequenzfile:
 				if Line.startswith(">"+Taxon):
 					#print Line.strip("\n")
-					Outfile.write(Line)
+					#Outfile.write(Line)
+					SeqName = Line.strip("\n")
 					Found = 1
 					continue
 				if Found == 1:
 					if Line.find(">") == -1:
 						#print Line.strip("\n")
-						Outfile.write(Line.strip("\n"))
+						#Outfile.write(Line.strip("\n"))
+						Sequence += Line.strip("\n")
 					else:
-						Outfile.write("\n")
-						Found = 0						
+						#Outfile.write("\n")
+						Found = 0
+			if len(Sequence) > 200:
+				Outfile.write(SeqName)
+				Outfile.write(Sequence+"\n")	
+			else:
+				if SeqName != "":
+					print "%s: Sequence %s is too short (<200bp) and was not included" % (RawFile,SeqName)						
 			Sequenzfile.seek(0)
 		Outfile.close()
 	if file == 0:
@@ -227,11 +238,14 @@ def replace():	# replaces - with ? at the beginning and end of fasta alignments
 		Outfile = open(AlFile+"_replaced", "w")
 		for Taxon in range(0,MaxSeq):
 			#print TaxonList[Taxon]
-			Outfile.write(TaxonList[Taxon]+"\n")
-			#print "seqlist:"
-			#print SequenceList
-			Outfile.write(SequenceList[Taxon])
-			Outfile.write("\n")
+			if len(SequenceList[Taxon])-SequenceList[Taxon].count("?")-SequenceList[Taxon].count("-") >= 200:
+				Outfile.write(TaxonList[Taxon]+"\n")
+				#print "seqlist:"
+				#print SequenceList
+				Outfile.write(SequenceList[Taxon])
+				Outfile.write("\n")
+			else:
+				print "REPLACE: %s was not added because it is too short (<200bp)" % TaxonList[Taxon]
 		Outfile.close()
 		File.close()
 	if file == 0:
@@ -272,7 +286,6 @@ def concat():
 				Seq += Line.strip("\n")
 			if ">" in Line:
 				break
-
 		return Seq
 
 	for ReplFile in glob.glob(os.path.join(TMPD,"*_replaced")):
@@ -299,8 +312,6 @@ def concat():
 			Sequenzfile.seek(0)	
 			TaxonNum +=1
 		SequenceList = add_missing(SequenceList)
-	
-	
 		
 	if file == 0:
 		print "Concat: No \"*_replaced\" files found in specified directory", TMPD
