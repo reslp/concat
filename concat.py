@@ -225,7 +225,14 @@ def add_missing(seqdict):
 	return seqdict
 
 
-def concat(taxon_list, file_list, WD):
+def concat(taxon_list, file_list, outdir, WD):
+	if outdir == None or outdir == "":
+		print(now(), "(concat) No output directory specified. Will place output files in wd.", file=sys.stderr)
+		outdir = ""
+	path = os.path.join(WD, outdir)
+	if not os.path.exists(path):
+		os.makedirs(path)
+	print(now(), "(concat) Output is set to", path, file=sys.stderr)
 	TaxonList = taxon_list
 	TaxonListOutput = TaxonList [:] #Taxon List for Output
 	if not file_list:
@@ -242,7 +249,7 @@ def concat(taxon_list, file_list, WD):
 			else:
 				concat_dict[current_taxon] += line.strip("\n")
 		concat_dict = add_missing(concat_dict)
-	Outfile = open("concat.fas", "w")
+	Outfile = open(os.path.join(path,"concat.fas"), "w")
 	for taxon in taxon_list:
 		Outfile.write(">" + taxon + "\n")
 		Outfile.write(concat_dict[taxon]+"\n")
@@ -296,7 +303,7 @@ if __name__ == "__main__":
 	
 	outdir = Args.o
 	
-	print(now(), "Found", len(input_file_list), " alignment files in FASTA format")
+	print(now(), "Found", len(input_file_list), "alignment files in FASTA format")
 	
 	if Args.runmode == "reduce":
 		print (now(), "Runmode: reduce. Reducing sequence files to specified taxa...", file=sys.stderr)
@@ -309,7 +316,7 @@ if __name__ == "__main__":
 		replace(taxon_list, input_file_list, outdir, WD)
 	if Args.runmode == "concat":
 		print (now(), "Runmode: concat. Concatenating sequences...", file=sys.stderr)
-		concat(taxon_list, input_file_list, WD)
+		concat(taxon_list, input_file_list, outdir, WD)
 	if Args.runmode == "all":
 		print (now(), "Runmode: all. Will run reduce, align, replace and concat. -o will be ignored", file=sys.stderr)
 		print (now(), "Running reduce...", file=sys.stderr)
@@ -322,5 +329,5 @@ if __name__ == "__main__":
 		replace(taxon_list, input_file_list, None, WD)
 		print (now(), "Running concat...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "replace")
-		concat(taxon_list, input_file_list, WD)
+		concat(taxon_list, input_file_list,None, WD)
 	print (now(), "done", file=sys.stderr)
