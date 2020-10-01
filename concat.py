@@ -310,11 +310,12 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 	Outfile.close()
 	Outfile = open(os.path.join(path,"statistics.txt"), "w")
 	if Args.partition:
+		print(now(), "(concat) --statistics specified. Will create alignment statitsics file.", file=sys.stderr)
 		Outfile.write("alignment\tstart\tend\tlength\n")
 		for info in alignment_infos:
 			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\n"
 			Outfile.write(out)
-		print(alignment_infos)
+		#print(alignment_infos)
 		
 
 
