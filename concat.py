@@ -22,9 +22,10 @@ import platform
 import time
 from subprocess import Popen, PIPE
 import sys
+from collections import defaultdict
 
 ver = 0.2
-parser = argparse.ArgumentParser(description="%(prog)s (build: Sep 8, 2020) will create concatened alignments from seperate single locus files")
+parser = argparse.ArgumentParser(description="%(prog)s (build: Oct 1, 2020) will create concatened alignments from seperate single locus files")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
 parser.add_argument("-i", dest="input_file", nargs="*", type=str, help="names & path to input files that should be used. Seperate filenames with space. e.g.: \"its.fas lsu.fas\"")
@@ -35,6 +36,9 @@ parser.add_argument("-v", action="version", help="outputs version of concat scri
 parser.add_argument("--runmode", dest="runmode",action="store", help="Specify runmode. Possible options: replace, reduce, align, concat, all. Runmode all will ignore -o")
 parser.add_argument("-N", dest="NNN",action="store_true", help="adds Ns between loci to seperate them in concatenated alignment. Default: false")
 parser.add_argument("-M", dest="MMM",default="-", help="Character to add for missing sequences (concat) and positions at beginning and end of sequences (replace). Default: -")
+parser.add_argument("--biopython", dest="biopython",action="store_true", default=False, help="Optional: Use approach based on biopython. biopython >= 1.78 needs to be installed. Currently works only for --runmode concat.")
+parser.add_argument("--statistics", dest="partition",action="store_true", default=False, help="Optional: Output start and end position of partitions in concatenated alignment.")
+
 #parser.add_argument("-aligner", dest="align_param",action="store_true", help="Arguments that should be sent to the aligner (not yet implemented)")
 #parser.add_argument("-clean", dest="clean",action="store_true", help="performs a clean run: removes all intermediate files")
 #parser.add_argument("-trim", dest="trim",action="store_true", help="reduce alignment to include only sites in at least number of sequences (not yet implemented)")
@@ -253,6 +257,65 @@ def concat(taxon_list, file_list, outdir, WD):
 	for taxon in taxon_list:
 		Outfile.write(">" + taxon + "\n")
 		Outfile.write(concat_dict[taxon]+"\n")
+		
+def bio_concat(taxon_list, file_list, outdir, WD):
+	# this currently only works with fasta files!
+	from Bio import SeqIO
+	from Bio.SeqRecord import SeqRecord
+	from Bio.Seq import UnknownSeq, Seq
+	from Bio.Align import MultipleSeqAlignment 
+	if outdir == None or outdir == "":
+		print(now(), "(concat) No output directory specified. Will place output files in wd.", file=sys.stderr)
+		outdir = ""
+	path = os.path.join(WD, outdir)
+	if not os.path.exists(path):
+		os.makedirs(path)
+	print(now(), "(concat) Output is set to", path, file=sys.stderr)
+	concat_dict = dict.fromkeys(taxon_list, "")
+	alignments = []
+	
+	for seqfile in file_list:
+		alignment = []
+		for record in SeqIO.parse(seqfile, "fasta"):
+			if record.id in taxon_list:
+				alignment.append(record)
+		#print(len(alignment))
+		alignments.append(MultipleSeqAlignment(alignment))
+	new_alignments =[] 
+	position = 0
+	
+	#create temp dictionary
+	new_alignment = defaultdict(list)
+	alignment_infos = []
+	for alignment,seqfile in zip(alignments,file_list):
+		length = alignment.get_alignment_length()
+		alignment_infos.append((seqfile, position + 1, position + length, length))
+		position += length
+		labels_in_alignment = set(seq.id for seq in alignment)
+		# get sequence names missing in alignment:
+		missing = set(taxon_list) - labels_in_alignment
+
+		# now create sequences for missing labels:
+		for seqid in missing:
+			new_seq = UnknownSeq(length, alphabet=alignment._alphabet)
+			new_alignment[seqid].append(str(new_seq))
+		# also add all other sequences to temporary dict
+		for seq in alignment:
+			new_alignment[seq.id].append(str(seq.seq))
+	Outfile = open(os.path.join(path,"concat.fas"), "w")
+	msa = MultipleSeqAlignment(SeqRecord(Seq(''.join(sequence), alphabet=alignments[0]._alphabet), id=seqid) for (seqid, sequence) in new_alignment.items())
+	for seq in msa:
+		Outfile.write(">" + seq.id + "\n")
+		Outfile.write(str(seq.seq) + "\n")
+	Outfile.close()
+	Outfile = open(os.path.join(path,"statistics.txt"), "w")
+	if Args.partition:
+		Outfile.write("alignment\tstart\tend\tlength\n")
+		for info in alignment_infos:
+			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\n"
+			Outfile.write(out)
+		print(alignment_infos)
+		
 
 
 if __name__ == "__main__":
@@ -290,7 +353,7 @@ if __name__ == "__main__":
 	print(now(), "Taxon file containes", len(taxon_list), "taxa", file=sys.stderr)
 	#TaxonListOutput = TaxonList [:] #create Taxon List for Output
 	
-
+	
 	print(now(), "Checking sequence input files...", file=sys.stderr)
 	if Args.input_file != None:
 		which_type = "files"
@@ -316,7 +379,12 @@ if __name__ == "__main__":
 		replace(taxon_list, input_file_list, outdir, WD)
 	if Args.runmode == "concat":
 		print (now(), "Runmode: concat. Concatenating sequences...", file=sys.stderr)
-		concat(taxon_list, input_file_list, outdir, WD)
+		if Args.biopython:
+			print (now(), "Using --biopython method", file=sys.stderr)
+			bio_concat(taxon_list, input_file_list, outdir, WD)
+		else:
+			print (now(), "Using standard method", file=sys.stderr)
+			concat(taxon_list, input_file_list, outdir, WD)
 	if Args.runmode == "all":
 		print (now(), "Runmode: all. Will run reduce, align, replace and concat. -o will be ignored", file=sys.stderr)
 		print (now(), "Running reduce...", file=sys.stderr)
