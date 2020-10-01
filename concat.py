@@ -35,9 +35,9 @@ parser.add_argument("-v", action="version", help="outputs version of concat scri
 #parser.add_argument("--add-to-name", dest="add", action="store_true", help="Append X to species name if sequences is present. O if it is missing")
 parser.add_argument("--runmode", dest="runmode",action="store", help="Specify runmode. Possible options: replace, reduce, align, concat, all. Runmode all will ignore -o")
 parser.add_argument("-N", dest="NNN",action="store_true", help="adds Ns between loci to seperate them in concatenated alignment. Default: false")
-parser.add_argument("-M", dest="MMM",default="-", help="Character to add for missing sequences (concat) and positions at beginning and end of sequences (replace). Default: -")
-parser.add_argument("--biopython", dest="biopython",action="store_true", default=False, help="Optional: Use approach based on biopython. biopython >= 1.78 needs to be installed. Currently works only for --runmode concat.")
-parser.add_argument("--statistics", dest="partition",action="store_true", default=False, help="Optional: Output start and end position of partitions in concatenated alignment.")
+parser.add_argument("-M", dest="MMM",default="?", help="Character to add for missing sequences (concat) and positions at beginning and end of sequences (replace). Default: ?")
+parser.add_argument("--biopython", dest="biopython",action="store_true", default=False, help="Optional: Use approach based on biopython. biopython v1.77 needs to be installed. Currently works only for --runmode concat.")
+parser.add_argument("--statistics", dest="partition",action="store_true", default=False, help="Optional: Output start and end position of partitions in concatenated alignment. Needs --biopython")
 
 #parser.add_argument("-aligner", dest="align_param",action="store_true", help="Arguments that should be sent to the aligner (not yet implemented)")
 #parser.add_argument("-clean", dest="clean",action="store_true", help="performs a clean run: removes all intermediate files")
