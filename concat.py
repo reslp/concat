@@ -24,8 +24,8 @@ from subprocess import Popen, PIPE
 import sys
 from collections import defaultdict
 
-ver = 0.2
-parser = argparse.ArgumentParser(description="%(prog)s (build: Oct 1, 2020) will create concatened alignments from seperate single locus files")
+ver = 0.21
+parser = argparse.ArgumentParser(description="%(prog)s (build: Dec 4, 2020) will create concatened alignments from seperate single locus files")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
 parser.add_argument("-i", dest="input_file", nargs="*", type=str, help="names & path to input files that should be used. Seperate filenames with space. e.g.: \"its.fas lsu.fas\"")
@@ -38,6 +38,8 @@ parser.add_argument("-N", dest="NNN",action="store_true", help="adds Ns between 
 parser.add_argument("-M", dest="MMM",default="?", help="Character to add for missing sequences (concat) and positions at beginning and end of sequences (replace). Default: ?")
 parser.add_argument("--biopython", dest="biopython",action="store_true", default=False, help="Optional: Use approach based on biopython. biopython v1.77 needs to be installed. Currently works only for --runmode concat.")
 parser.add_argument("--statistics", dest="partition",action="store_true", default=False, help="Optional: Output start and end position of partitions in concatenated alignment. Needs --biopython")
+parser.add_argument("--seqtype", dest="seqtype", default="nu", help="Specify sequence type. Possible values: nu and aa. default = nu. This is needed to correctly identify parsimony informative sites.")
+parser.add_argument("--noseq", dest="noseq", action="store_true", default=False, help="Can be used in combination with --statistics. When this is specified only the statistics file but NO sequence file will be produced.")
 
 #parser.add_argument("-aligner", dest="align_param",action="store_true", help="Arguments that should be sent to the aligner (not yet implemented)")
 #parser.add_argument("-clean", dest="clean",action="store_true", help="performs a clean run: removes all intermediate files")
@@ -284,13 +286,23 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 	new_alignments =[] 
 	position = 0
 	
+
+	
 	#create temp dictionary
 	new_alignment = defaultdict(list)
 	alignment_infos = []
 	for alignment,seqfile in zip(alignments,file_list):
-		length = alignment.get_alignment_length()
-		alignment_infos.append((seqfile, position + 1, position + length, length))
-		position += length
+		
+		if Args.partition:
+			#gather alignment information if --statistics flag is specified:
+			length = alignment.get_alignment_length()
+			nspecies = len(alignment)
+			nparsimony = get_parsimony_sites(alignment)
+			nvariable = get_variable_sites(alignment)
+			nfixed = get_fixed_sites(alignment)
+			alignment_infos.append((seqfile, position + 1, position + length, length, nspecies, nparsimony, nvariable, nfixed))
+			position += length
+		
 		labels_in_alignment = set(seq.id for seq in alignment)
 		# get sequence names missing in alignment:
 		missing = set(taxon_list) - labels_in_alignment
@@ -302,22 +314,70 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 		# also add all other sequences to temporary dict
 		for seq in alignment:
 			new_alignment[seq.id].append(str(seq.seq))
-	Outfile = open(os.path.join(path,"concat.fas"), "w")
-	msa = MultipleSeqAlignment(SeqRecord(Seq(''.join(sequence), alphabet=alignments[0]._alphabet), id=seqid) for (seqid, sequence) in new_alignment.items())
-	for seq in msa:
-		Outfile.write(">" + seq.id + "\n")
-		Outfile.write(str(seq.seq) + "\n")
-	Outfile.close()
-	Outfile = open(os.path.join(path,"statistics.txt"), "w")
+	
+	if not Args.noseq:
+		Outfile = open(os.path.join(path,"concat.fas"), "w")
+		msa = MultipleSeqAlignment(SeqRecord(Seq(''.join(sequence), alphabet=alignments[0]._alphabet), id=seqid) for (seqid, sequence) in new_alignment.items())
+		for seq in msa:
+			Outfile.write(">" + seq.id + "\n")
+			Outfile.write(str(seq.seq) + "\n")
+		Outfile.close()
+	
 	if Args.partition:
-		print(now(), "(concat) --statistics specified. Will create alignment statitsics file.", file=sys.stderr)
-		Outfile.write("alignment\tstart\tend\tlength\n")
+		Outfile = open(os.path.join(path,"statistics.txt"), "w")
+		print(now(), "(concat) --statistics specified. Will create alignment statistics file.", file=sys.stderr)
+		Outfile.write("alignment\tstart\tend\tlength\tnseqs\tnparsimony\tnvariable\tnfixed\n")
 		for info in alignment_infos:
-			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\n"
+			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\t"+str(info[4])+"\t"+str(info[5])+"\t"+str(info[6])+"\t"+str(info[7])+"\n"
 			Outfile.write(out)
+		Outfile.close()
 		#print(alignment_infos)
-		
 
+def get_parsimony_sites(alignment):
+	# calculate parsimony informative sites:
+	# considered sites have at least two states with at least two occurences.
+	npars = 0
+	for i in range(0, alignment.get_alignment_length()):
+		unique_chars = set(alignment[:, i])
+		#skip positions which contain ambiguous positions.
+		#handle DNA and AA sequences differently here:
+		if Args.seqtype == "aa":
+			if "X" in unique_chars or "-" in unique_chars or "?" in unique_chars:
+				continue
+		else:
+			if "N" in unique_chars or "-" in unique_chars or "?" in unique_chars:
+				continue
+		counts = [pos for pos in unique_chars if alignment[:, i].count(pos) >=2]
+		ncounts = len(counts)
+		if ncounts >= 2:
+			npars += 1
+	return npars	
+	
+def get_variable_sites(alignment):	
+	# number of variable sites
+	nvar = 0
+	for i in range(0, alignment.get_alignment_length()):
+		if len(set(alignment[:, i])) >= 2:
+			nvar += 1
+	return nvar
+	
+def get_fixed_sites(alignment):
+	# number of fixed sites
+	nfixed = 0
+	for i in range(0, alignment.get_alignment_length()):
+		unique_chars = set(alignment[:, i])
+		#skip positions which contain ambiguous positions.
+		#handle DNA and AA sequences differently here:
+		if Args.seqtype == "aa":
+			if "X" in unique_chars or "-" in unique_chars or "?" in unique_chars:
+				continue
+		else:
+			if "N" in unique_chars or "-" in unique_chars or "?" in unique_chars:
+				continue
+		if len(unique_chars) == 1:
+			nfixed += 1
+	return nfixed
+		
 
 if __name__ == "__main__":
 	print(now(), "---- Welcome to concat v%s ----" % ver, file=sys.stderr)
@@ -326,6 +386,7 @@ if __name__ == "__main__":
 	OS = platform.system()
 	print (now(), "Running on platform:",OS, file=sys.stderr)
 	print (now(), "Working directory: ", WD, file=sys.stderr)
+	print (now(), "Assuming", Args.seqtype, "sequences.", file=sys.stderr)
 	#check for number of commandline arguments, print help if none given
 	if len(sys.argv)<2:
 		parser.print_help()
@@ -382,6 +443,8 @@ if __name__ == "__main__":
 		print (now(), "Runmode: concat. Concatenating sequences...", file=sys.stderr)
 		if Args.biopython:
 			print (now(), "Using --biopython method", file=sys.stderr)
+			if Args.noseq:
+				print (now(), "--noseq specified. Will not write sequence file.", file=sys.stderr)
 			bio_concat(taxon_list, input_file_list, outdir, WD)
 		else:
 			print (now(), "Using standard method", file=sys.stderr)
