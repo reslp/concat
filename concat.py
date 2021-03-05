@@ -24,7 +24,7 @@ from subprocess import Popen, PIPE
 import sys
 from collections import defaultdict
 
-ver = 0.21
+ver = 0.3
 parser = argparse.ArgumentParser(description="%(prog)s (build: Dec 4, 2020) will create concatened alignments from seperate single locus files")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
@@ -33,7 +33,7 @@ parser.add_argument("-o", dest="o", help="specify output directory")
 parser.add_argument("-l", dest="minlen", default = 1, type=int, help="Minimum length of sequence to keep (used in reduce). Default: 1")
 parser.add_argument("-v", action="version", help="outputs version of concat script", version="%(prog)s Version "+str(ver)+" (08.09.20)")
 #parser.add_argument("--add-to-name", dest="add", action="store_true", help="Append X to species name if sequences is present. O if it is missing")
-parser.add_argument("--runmode", dest="runmode",action="store", help="Specify runmode. Possible options: replace, reduce, align, concat, all. Runmode all will ignore -o")
+parser.add_argument("-m", "--runmode", dest="runmode",action="store", help="Specify runmode. Possible options: replace, reduce, align, concat, all. Runmode all will ignore -o")
 parser.add_argument("-N", dest="NNN",action="store_true", help="adds Ns between loci to seperate them in concatenated alignment. Default: false")
 parser.add_argument("-M", dest="MMM",default="?", help="Character to add for missing sequences (concat) and positions at beginning and end of sequences (replace). Default: ?")
 parser.add_argument("--biopython", dest="biopython",action="store_true", default=False, help="Optional: Use approach based on biopython. biopython v1.77 needs to be installed. Currently works only for --runmode concat.")
@@ -118,7 +118,7 @@ def reduce(taxon_list, file_list, outdir, WD): #reduces alignments to desired se
 	if file == 0:
 		print (now(), "(reduce) No files provided.")
 
-def align(taxon_list, files_list, outdir, WD, OS): # aligns sequence files
+def align(files_list, outdir, WD, OS): # aligns sequence files
 	if outdir == None or outdir == "":
 		print(now(), "(align) No output directory specified. Will place output files in folder align.", file=sys.stderr)
 		outdir = "align"
@@ -147,7 +147,7 @@ def align(taxon_list, files_list, outdir, WD, OS): # aligns sequence files
 		return
 
 
-def replace(taxon_list, file_list, outdir, WD):	# replaces - with ? at the beginning and end of fasta alignments
+def replace(file_list, outdir, WD):	# replaces - with ? at the beginning and end of fasta alignments
 	if outdir == None or outdir == "":
 		print(now(), "(replace) No output directory specified. Will place output files in folder replace.", file=sys.stderr)
 		outdir = "replace"
@@ -227,11 +227,36 @@ def add_missing(seqdict):
 		if len(seqdict[taxon]) < length:
 			seqdict[taxon] += Args.MMM * (length-len(seqdict[taxon]))
 		if Args.NNN == True:
-			seqdict[taxon] += "X" * 5
+			if Args.seqtype == "nu":
+				seqdict[taxon] += "N" * 5
+			if Args.seqtype == "aa":
+				seqdict[taxon] += "X" * 5
 	return seqdict
 
 
+def get_all_taxa(file_list):
+	taxon_list = []
+	print(now(), "(get_all_taxa): No IDs specified, will use sequence names.", file= sys.stderr)
+	for seqfile in file_list:
+		taxlist = []
+		for line in open(seqfile, "r"):
+			if line.startswith(">"):
+				current_taxon = line.strip().split(">")[-1]
+			else:
+				continue
+			taxlist.append(current_taxon)
+		for taxon in set(taxlist):
+			if taxlist.count(taxon) > 1:
+				print(now(), "(get_all_taxa):WARNING: Duplicated taxon: ",taxon," in file ",seqfile,  file= sys.stderr)
+			taxon_list += list(set(taxlist))
+	return taxon_list
+
 def concat(taxon_list, file_list, outdir, WD):
+	if not file_list:
+		print(now(), "(concat): No files specified", file= sys.stderr)
+		return
+	if taxon_list == None:
+		taxon_list=get_all_taxa(file_list)
 	if outdir == None or outdir == "":
 		print(now(), "(concat) No output directory specified. Will place output files in wd.", file=sys.stderr)
 		outdir = ""
@@ -273,9 +298,10 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 	if not os.path.exists(path):
 		os.makedirs(path)
 	print(now(), "(concat) Output is set to", path, file=sys.stderr)
+	if taxon_list == None:
+		taxon_list=get_all_taxa(file_list)
 	concat_dict = dict.fromkeys(taxon_list, "")
 	alignments = []
-	
 	for seqfile in file_list:
 		alignment = []
 		for record in SeqIO.parse(seqfile, "fasta"):
@@ -286,16 +312,14 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 	new_alignments =[] 
 	position = 0
 	
-
-	
 	#create temp dictionary
 	new_alignment = defaultdict(list)
 	alignment_infos = []
 	for alignment,seqfile in zip(alignments,file_list):
 		
+		length = alignment.get_alignment_length()
+		#gather alignment information if --statistics flag is specified:
 		if Args.partition:
-			#gather alignment information if --statistics flag is specified:
-			length = alignment.get_alignment_length()
 			nspecies = len(alignment)
 			nparsimony = get_parsimony_sites(alignment)
 			nvariable = get_variable_sites(alignment)
@@ -379,68 +403,86 @@ def get_fixed_sites(alignment):
 	return nfixed
 		
 
+def check_sequence_input(input_i, input_d):
+	if input_i == None and input_d == None:
+		print(now(), "Need input files. Use either -i oder -d. Try also -h for more information.", file=sys.stderr)
+		return
+	if input_i != None and input_d != None:
+                print (now(), "Can't use both input files (-i flag) and directory (-d flag). Please use only one option.", file=sys.stderr)
+                return
+	print(now(), "Checking sequence input files...", file=sys.stderr)
+	if input_i != None:
+                which_type = "files"
+                file_info = input_i
+	elif input_d != None:
+                which_type = "dir"
+                file_info = input_d
+        #print(which_type)
+	input_file_list = get_input_files(which_type, file_info)
+	print(now(), "Found", len(input_file_list), "alignment files in FASTA format")
+	return input_file_list
+
+def check_taxid_file(taxonfile):
+	if taxonfile == None:
+		return
+	print(now(), "Reading taxon file...", file=sys.stderr)
+	TaxonFile = open(taxonfile, "r")
+	taxon_list = []
+	for Line in TaxonFile:
+		taxon_list.append(Line.strip("\n"))
+	TaxonFile.close()
+	if len(taxon_list) == 0:
+		print(now(), "Taxon file", TaxonFile, "is empty.", file=sys.stderr)
+		sys.exit(1)
+	print(now(), "Taxon file containes", len(taxon_list), "taxa", file=sys.stderr)
+	return taxon_list 
+
 if __name__ == "__main__":
 	print(now(), "---- Welcome to concat v%s ----" % ver, file=sys.stderr)
+	if len(sys.argv)<2:
+		parser.print_help()
+		sys.exit(1)
 	WD = os.getcwd()
 	WD = str(WD)
 	OS = platform.system()
 	print (now(), "Running on platform:",OS, file=sys.stderr)
 	print (now(), "Working directory: ", WD, file=sys.stderr)
 	print (now(), "Assuming", Args.seqtype, "sequences.", file=sys.stderr)
-	#check for number of commandline arguments, print help if none given
-	if len(sys.argv)<2:
-		parser.print_help()
-		sys.exit(1)
-	if Args.input_file == None and Args.directory == None:
-		print(now(), "Need input files. Use either -i oder -d. Try also -h for more information.", file=sys.stderr)
-		parser.print_help()
-		sys.exit(1)
-	if Args.taxonfile == None:
-		print (now(), "Need file containing taxon IDs. Use -t. Try also -h for more information.", file=sys.stderr)
-		sys.exit(1)
-	if Args.input_file != None and Args.directory != None:
-		print (now(), "Can't use both input files (-i flag) and directory (-d flag). Please use only one option.", file=sys.stderr)
-		sys.exit(1)
-	
-	#reading Taxa from taxonfile
-	print(now(), "Reading taxon file...", file=sys.stderr)
-	TaxonFile = open(Args.taxonfile, "r")
-	taxon_list = []
-	for Line in TaxonFile:
-		taxon_list.append(Line.strip("\n"))
-	TaxonFile.close()
-	if len(taxon_list) == 0:
-		rint(now(), "Taxon file", TaxonFile, "is empty.", file=sys.stderr)
-		sys.exit(1)
-	print(now(), "Taxon file containes", len(taxon_list), "taxa", file=sys.stderr)
-	#TaxonListOutput = TaxonList [:] #create Taxon List for Output
-	
-	
-	print(now(), "Checking sequence input files...", file=sys.stderr)
-	if Args.input_file != None:
-		which_type = "files"
-		file_info = Args.input_file
-	elif Args.directory != None:
-		which_type = "dir"
-		file_info = Args.directory
-	#print(which_type)
-	input_file_list = get_input_files(which_type, file_info)
 	
 	outdir = Args.o
 	
-	print(now(), "Found", len(input_file_list), "alignment files in FASTA format")
-	
 	if Args.runmode == "reduce":
 		print (now(), "Runmode: reduce. Reducing sequence files to specified taxa...", file=sys.stderr)
-		reduce(taxon_list, input_file_list, outdir, WD)
+		input_file_list = check_sequence_input(Args.input_file, Args.directory)
+		taxon_list = check_taxid_file(Args.taxonfile)
+		if input_file_list and taxon_list:
+			reduce(taxon_list, input_file_list, outdir, WD)
+		else:
+			print(now(), "Taxon id file (-t) or sequence files (-i or -d) are missing. Please specify")
+			sys.exit(1)
 	if Args.runmode == "align":
 		print (now(), "Runmode: aligning. Align sequences...", file=sys.stderr)
-		align(taxon_list, input_file_list, outdir, WD, OS)
+		input_file_list = check_sequence_input(Args.input_file, Args.directory)
+		if input_file_list:
+			align(input_file_list, outdir, WD, OS)
+		else:
+			print(now(), "Taxon id file (-t) or sequence files (-i or -d) are missing. Please specify")
+			sys.exit(1)
 	if Args.runmode == "replace":
 		print (now(), "Runmode: replace. Replace gaps at ends of sequences...", file=sys.stderr)
-		replace(taxon_list, input_file_list, outdir, WD)
+		input_file_list = check_sequence_input(Args.input_file, Args.directory)
+		if input_file_list:
+			replace(taxon_list, input_file_list, outdir, WD)
+		else:
+			print(now(), "Taxon id file (-t) or sequence files (-i or -d) are missing. Please specify")
+			sys.exit(1)
 	if Args.runmode == "concat":
 		print (now(), "Runmode: concat. Concatenating sequences...", file=sys.stderr)
+		input_file_list = check_sequence_input(Args.input_file, Args.directory)
+		if not input_file_list:
+			print(now(), "No input files found. Check your specified -i or -d")
+			sys.exit(1)
+		taxon_list = check_taxid_file(Args.taxonfile)
 		if Args.biopython:
 			print (now(), "Using --biopython method", file=sys.stderr)
 			if Args.noseq:
@@ -452,6 +494,10 @@ if __name__ == "__main__":
 	if Args.runmode == "all":
 		print (now(), "Runmode: all. Will run reduce, align, replace and concat. -o will be ignored", file=sys.stderr)
 		print (now(), "Running reduce...", file=sys.stderr)
+		input_file_list = check_sequence_input(Args.input_file, Args.directory)
+		taxon_list = check_taxid_file(Args.taxonfile)
+		if input_file_list == None or taxon_list == None:
+			sys.exit(1)
 		reduce(taxon_list, input_file_list, "", WD)
 		print (now(), "Running align...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "reduce")
