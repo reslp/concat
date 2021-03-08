@@ -68,10 +68,10 @@ def get_input_files(which_type, file_info):
 	if which_type == "files":
 		SeqFileList = file_info
 		OnlyFileName = [check_fasta(f) for f in SeqFileList if check_fasta(f) != None] 
-		return OnlyFileName
+		return sorted(OnlyFileName, key=lambda i: os.path.splitext(os.path.basename(i))[0])
 	if which_type == "dir":
 		OnlyFileName = [check_fasta(f) for f in glob.glob(file_info+"/*") if check_fasta(f) != None]
-		return OnlyFileName
+		return sorted(OnlyFileName, key=lambda i: os.path.splitext(os.path.basename(i))[0])
 
 
 def reduce(taxon_list, file_list, outdir, WD): #reduces alignments to desired set of taxa
@@ -425,7 +425,6 @@ if __name__ == "__main__":
 		file_info = Args.directory
 	#print(which_type)
 	input_file_list = get_input_files(which_type, file_info)
-	
 	outdir = Args.o
 	
 	print(now(), "Found", len(input_file_list), "alignment files in FASTA format")
