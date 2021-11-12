@@ -25,7 +25,7 @@ import sys
 from collections import defaultdict
 
 ver = 0.3
-parser = argparse.ArgumentParser(description="%(prog)s (build: Dec 4, 2020) will create concatened alignments from seperate single locus files")
+parser = argparse.ArgumentParser(description="%(prog)s (build: Mar 10, 2021) will create concatened alignments from seperate single locus files")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
 parser.add_argument("-i", dest="input_file", nargs="*", type=str, help="names & path to input files that should be used. Seperate filenames with space. e.g.: \"its.fas lsu.fas\"")
@@ -266,9 +266,6 @@ def concat(taxon_list, file_list, outdir, WD):
 	print(now(), "(concat) Output is set to", path, file=sys.stderr)
 	TaxonList = taxon_list
 	TaxonListOutput = TaxonList [:] #Taxon List for Output
-	if not file_list:
-		print(now(), "(concat): No files specified", file= sys.stderr)
-		return
 	print(now(), "(concat): Concatenating", len(file_list), "files", file= sys.stderr)
 	concat_dict = dict.fromkeys(taxon_list, "")
 	for seqfile in file_list:
@@ -492,7 +489,7 @@ if __name__ == "__main__":
 			print (now(), "Using standard method", file=sys.stderr)
 			concat(taxon_list, input_file_list, outdir, WD)
 	if Args.runmode == "all":
-		print (now(), "Runmode: all. Will run reduce, align, replace and concat. -o will be ignored", file=sys.stderr)
+		print (now(), "Runmode: all. Will run reduce, align, replace and concat.", file=sys.stderr)
 		print (now(), "Running reduce...", file=sys.stderr)
 		input_file_list = check_sequence_input(Args.input_file, Args.directory)
 		taxon_list = check_taxid_file(Args.taxonfile)
@@ -501,10 +498,10 @@ if __name__ == "__main__":
 		reduce(taxon_list, input_file_list, "", WD)
 		print (now(), "Running align...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "reduce")
-		align(taxon_list, input_file_list, None, WD, OS)
+		align(input_file_list, "align", WD, OS)
 		print (now(), "Running replace...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "align")
-		replace(taxon_list, input_file_list, None, WD)
+		replace(input_file_list, "replace", WD)
 		print (now(), "Running concat...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "replace")
 		concat(taxon_list, input_file_list,None, WD)
