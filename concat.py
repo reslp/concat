@@ -24,7 +24,7 @@ from subprocess import Popen, PIPE
 import sys
 from collections import defaultdict
 
-ver = 0.3
+ver = 0.3.1
 parser = argparse.ArgumentParser(description="%(prog)s (build: Mar 10, 2021) will create concatened alignments from seperate single locus files")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
