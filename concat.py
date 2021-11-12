@@ -68,10 +68,10 @@ def get_input_files(which_type, file_info):
 	if which_type == "files":
 		SeqFileList = file_info
 		OnlyFileName = [check_fasta(f) for f in SeqFileList if check_fasta(f) != None] 
-		return OnlyFileName
+		return sorted(OnlyFileName, key=lambda i: os.path.splitext(os.path.basename(i))[0])
 	if which_type == "dir":
 		OnlyFileName = [check_fasta(f) for f in glob.glob(file_info+"/*") if check_fasta(f) != None]
-		return OnlyFileName
+		return sorted(OnlyFileName, key=lambda i: os.path.splitext(os.path.basename(i))[0])
 
 
 def reduce(taxon_list, file_list, outdir, WD): #reduces alignments to desired set of taxa
@@ -432,6 +432,7 @@ def check_taxid_file(taxonfile):
 		print(now(), "Taxon file", TaxonFile, "is empty.", file=sys.stderr)
 		sys.exit(1)
 	print(now(), "Taxon file containes", len(taxon_list), "taxa", file=sys.stderr)
+
 	return taxon_list 
 
 if __name__ == "__main__":
