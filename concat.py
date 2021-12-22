@@ -426,6 +426,7 @@ def check_taxid_file(taxonfile):
 	TaxonFile = open(taxonfile, "r")
 	taxon_list = []
 	for Line in TaxonFile:
+	    if Line.strip("\n") != "": #only append to list of line is not empty
 		taxon_list.append(Line.strip("\n"))
 	TaxonFile.close()
 	if len(taxon_list) == 0:
