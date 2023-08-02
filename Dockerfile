@@ -1,15 +1,10 @@
-FROM reslp/mamba:1.4.1
+FROM reslp/mamba:0.25.0
 MAINTAINER <philipp.resl@uni-graz.at>
 
 RUN apt-get --allow-releaseinfo-change update && \
 	apt-get install -y wget git 
 
-RUN conda config --append channels bioconda && \
-	conda config --append channels conda-forge && \
-	conda config --append channels anaconda && \
-	mamba install -c bioconda biopython=1.77 && \
-	mamba install -c bioconda mafft=7.464 && \
-	conda clean -a -y
+RUN mamba install -c bioconda biopython=1.77 mafft=7.464 && conda clean -a -y
 
 WORKDIR /software
 
