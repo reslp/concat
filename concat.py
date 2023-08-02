@@ -1,19 +1,11 @@
 #!/usr/bin/env python
-#combines reduce.py, aligning, replace.py and concat.py into one script
-#created 31.07.2014
-#changes 08.09.2020
-#reslp
+# script to produce concatenated alignments and different alignment statistics
+# originally created 31.07.2014, extended since then
+# written by Philipp Resl
 
 # known issues:
 # can't change aligner settings - in align
-# NNs at the beginning of alignment - in concat - DONE
-# windows compatibility not checked - dropped
-# problem if file list is given! doesn't work properly. - in reduce - DONE
-# if concat only is used it works only for single lined sequences! - DONE
-# input dir has to be specified when concat is used! - done
-# still no check for sequence length in concat - done
 # names in ID file and sequence files have to be identical
-# adding X and Os to names is currently not implemented
 
 import argparse
 import glob
@@ -23,9 +15,10 @@ import time
 from subprocess import Popen, PIPE
 import sys
 from collections import defaultdict
+import copy
 
-ver = "0.3.1"
-parser = argparse.ArgumentParser(description="%(prog)s (build: Nov 12, 2021) will create concatened alignments from seperate single locus files")
+ver = "0.32"
+parser = argparse.ArgumentParser(description="%(prog)s (build: Aug 2, 2023) will create concatened alignments from seperate single locus files and produce different kinds of alignment statistics.")
 parser.add_argument("-t", dest="taxonfile", help="specify place of file containing desired taxon set")
 parser.add_argument("-d", dest="directory", help="specify directory with single locus files that should be used")
 parser.add_argument("-i", dest="input_file", nargs="*", type=str, help="names & path to input files that should be used. Seperate filenames with space. e.g.: \"its.fas lsu.fas\"")
@@ -321,7 +314,8 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 			nparsimony = get_parsimony_sites(alignment)
 			nvariable = get_variable_sites(alignment)
 			nfixed = get_fixed_sites(alignment)
-			alignment_infos.append((seqfile, position + 1, position + length, length, nspecies, nparsimony, nvariable, nfixed))
+			rcv = get_rcv_value(alignment)
+			alignment_infos.append((seqfile, position + 1, position + length, length, nspecies, nparsimony, nvariable, nfixed, rcv))
 			position += length
 		
 		labels_in_alignment = set(seq.id for seq in alignment)
@@ -347,12 +341,56 @@ def bio_concat(taxon_list, file_list, outdir, WD):
 	if Args.partition:
 		Outfile = open(os.path.join(path,"statistics.txt"), "w")
 		print(now(), "(concat) --statistics specified. Will create alignment statistics file.", file=sys.stderr)
-		Outfile.write("alignment\tstart\tend\tlength\tnseqs\tnparsimony\tnvariable\tnfixed\n")
+		Outfile.write("alignment\tstart\tend\tlength\tnseqs\tnparsimony\tnvariable\tnfixed\trcv\n")
 		for info in alignment_infos:
-			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\t"+str(info[4])+"\t"+str(info[5])+"\t"+str(info[6])+"\t"+str(info[7])+"\n"
+			out = str(info[0].split("/")[-1])+"\t"+str(info[1])+"\t"+str(info[2])+"\t"+str(info[3])+"\t"+str(info[4])+"\t"+str(info[5])+"\t"+str(info[6])+"\t"+str(info[7])+"\t"+str(info[8])+"\n"
 			Outfile.write(out)
 		Outfile.close()
 		#print(alignment_infos)
+
+def get_rcv_value(alignment):
+	from Bio.Align import MultipleSeqAlignment
+	from Bio.Seq import Seq
+	# calculate rcv (relative composition variability) according to
+	# Phillips & Penny (2003) - Molecular phylogenetics and Evolution - https://doi.org/10.1016/S1055-7903(03)00057-5
+	# remove fixed positions from alignment:
+	pos_to_keep = []
+	for i in range(0, alignment.get_alignment_length()):
+		if len(set(alignment[:, i])) == 1: # check if alignment column contains a fixed letter
+			next
+		else:
+			pos_to_keep.append(i)	
+	shortened_records_list = []
+	for record in alignment:
+		tmpseq = "".join([record.seq[i] for i in pos_to_keep])
+		tmprecord = copy.copy(record) #create a shallow copy of alignment for sanity.
+		tmprecord.seq = Seq(tmpseq, alignment._alphabet)
+		shortened_records_list.append(tmprecord)
+	shortalignment = MultipleSeqAlignment(shortened_records_list)
+
+	ntaxa = len(shortalignment)
+
+	# calculate averages for each occuring letter:
+	combinedseq = ""
+	for seq in shortalignment:
+		combinedseq += str(seq.seq)
+	if Args.seqtype == "aa": # remove gaps and ambiguous positions
+		combinedseq = combinedseq.replace("-", "").replace("?","").replace("X", "")
+	else:
+		combinedseq = combinedseq.replace("-", "").replace("?","").replace("N", "")
+	av = {}	
+	for letter in set(combinedseq):
+		av[letter] = combinedseq.count(letter) / ntaxa	
+	
+	# calculate rcv values and combine them
+	rcv_values = []
+	for seq in shortalignment:
+		rcv = 0
+		for letter in av.keys():
+			rcv += abs(seq.seq.count(letter) - av[letter])
+		rcv_values.append(rcv)
+	final_rcv = round(sum(rcv_values) / (ntaxa * shortalignment.get_alignment_length()), 4)
+	return final_rcv
 
 def get_parsimony_sites(alignment):
 	# calculate parsimony informative sites:
@@ -426,8 +464,8 @@ def check_taxid_file(taxonfile):
 	TaxonFile = open(taxonfile, "r")
 	taxon_list = []
 	for Line in TaxonFile:
-	    if Line.strip("\n") != "": #only append to list of line is not empty
-		taxon_list.append(Line.strip("\n"))
+		if Line.strip("\n") != "": #only append to list of line is not empty
+			taxon_list.append(Line.strip("\n"))
 	TaxonFile.close()
 	if len(taxon_list) == 0:
 		print(now(), "Taxon file", TaxonFile, "is empty.", file=sys.stderr)
