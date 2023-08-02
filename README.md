@@ -43,7 +43,7 @@ Getting help (displays all available command options):
 COPYRIGTH AND LICENSE
 =====================
 
-Copyright (C) 2014 Philipp Resl
+Copyright (C) 2014-2023 Philipp Resl
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
