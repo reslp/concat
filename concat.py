@@ -389,7 +389,12 @@ def get_rcv_value(alignment):
 		for letter in av.keys():
 			rcv += abs(seq.seq.count(letter) - av[letter])
 		rcv_values.append(rcv)
-	final_rcv = round(sum(rcv_values) / (ntaxa * shortalignment.get_alignment_length()), 4)
+
+	if (shortalignment.get_alignment_length() > 0): #check contains variable sites to calculate rcv
+		final_rcv = round(sum(rcv_values) / (ntaxa * shortalignment.get_alignment_length()), 4)
+	else: # if not set rcv to 1
+		final_rcv = 1
+
 	return final_rcv
 
 def get_parsimony_sites(alignment):
