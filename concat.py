@@ -33,6 +33,7 @@ parser.add_argument("--biopython", dest="biopython",action="store_true", default
 parser.add_argument("--statistics", dest="partition",action="store_true", default=False, help="Optional: Output start and end position of partitions in concatenated alignment. Needs --biopython")
 parser.add_argument("--seqtype", dest="seqtype", default="nu", help="Specify sequence type. Possible values: nu and aa. default = nu. This is needed to correctly identify parsimony informative sites.")
 parser.add_argument("--noseq", dest="noseq", action="store_true", default=False, help="Can be used in combination with --statistics. When this is specified only the statistics file but NO sequence file will be produced.")
+parser.add_argument("--clean", dest="clean", action="store_true", default=False, help="Can be used in combination with -m reduce. When this is specified, - and ? will be removed from sequences eg. when previously aligned sequences are used.")
 
 #parser.add_argument("-aligner", dest="align_param",action="store_true", help="Arguments that should be sent to the aligner (not yet implemented)")
 #parser.add_argument("-clean", dest="clean",action="store_true", help="performs a clean run: removes all intermediate files")
@@ -67,10 +68,12 @@ def get_input_files(which_type, file_info):
 		return sorted(OnlyFileName, key=lambda i: os.path.splitext(os.path.basename(i))[0])
 
 
-def reduce(taxon_list, file_list, outdir, WD): #reduces alignments to desired set of taxa
+def reduce(taxon_list, file_list, outdir, WD, clean): #reduces alignments to desired set of taxa
 	if outdir == None or outdir == "":
 		print(now(), "(Reduce) No output directory specified. Will create output files in folder reduce.", file=sys.stderr)
 		outdir = "reduce"
+	if clean:
+		print(now(), "(Reduce) Will clean sequences from ? and - characters")
 	path = os.path.join(WD, outdir)
 	if not os.path.exists(path):
 		os.makedirs(path)
@@ -92,12 +95,15 @@ def reduce(taxon_list, file_list, outdir, WD): #reduces alignments to desired se
 			SeqName = ""
 			for Line in Sequenzfile:
 				if Line.startswith(">"+Taxon):
-					SeqName = Line.strip("\n")
+					SeqName = ">"+Taxon
 					Found = 1
 					continue
 				if Found == 1:
 					if Line.find(">") == -1:
-						Sequence += Line.strip("\n")
+						if clean:
+							Sequence += Line.strip("\n").replace("-","").replace("?","")
+						else:
+							Sequence += Line.strip("\n")
 					else:
 						Found = 0
 			if len(Sequence) > Args.minlen:
@@ -498,7 +504,7 @@ if __name__ == "__main__":
 		input_file_list = check_sequence_input(Args.input_file, Args.directory)
 		taxon_list = check_taxid_file(Args.taxonfile)
 		if input_file_list and taxon_list:
-			reduce(taxon_list, input_file_list, outdir, WD)
+			reduce(taxon_list, input_file_list, outdir, WD, Args.clean)
 		else:
 			print(now(), "Taxon id file (-t) or sequence files (-i or -d) are missing. Please specify")
 			sys.exit(1)
@@ -540,7 +546,7 @@ if __name__ == "__main__":
 		taxon_list = check_taxid_file(Args.taxonfile)
 		if input_file_list == None or taxon_list == None:
 			sys.exit(1)
-		reduce(taxon_list, input_file_list, "", WD)
+		reduce(taxon_list, input_file_list, "", WD, Args.clean)
 		print (now(), "Running align...", file=sys.stderr)
 		input_file_list = get_input_files("dir", "reduce")
 		align(input_file_list, "align", WD, OS)
